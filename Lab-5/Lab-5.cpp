@@ -1,5 +1,7 @@
 ﻿#include <iostream>
 #include <vector>
+#include <fstream>
+#include <bitset>
 
 using namespace std;
 
@@ -112,13 +114,83 @@ pair<vector<int>, int> Berlekamp_Massey(const vector<int>& stream) {
     return {Connections_Polynomial, Linear_complexity};
 }
 
+std::string readFile(const std::string& filename) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Error opening file: " << filename << std::endl;
+        exit(1);
+    }
+
+    std::string line, tmp;
+
+    while (getline(file, line)) {
+        tmp += line + "\n";
+    }
+
+    file.close();
+
+    return tmp;
+}
+
+void writeFile(const std::string& filename, const std::string& content) {
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Error opening file: " << filename << std::endl;
+        exit(1);
+    }
+
+    file << content;
+    file.close();
+}
+
+string encryptString(const std::string& filename) {
+    string encrypted;
+    const vector initial_state = {1,0,1,1,0,1,0,1,1,0,1,1,0,1,0,1,0};
+    const vector feedback_taps = { 0, 4, 15, 16 };
+    const int m = 17;
+    const string plaintext = readFile(filename);
+    const int output_length = plaintext.size()*8;
+
+    vector<int> encryption_bits = LFSR_ALT(initial_state, m, feedback_taps, output_length);
+    std::vector bytes(plaintext.begin(), plaintext.end());
+    /*
+    for (int bit : encryption_bits) {
+        cout << bit;
+    }
+    cout << endl << endl;
+    */
+    for (int i = 0; i < plaintext.size(); i++) {
+        bitset<8> textByte;
+        bitset<8> encryptionByte;
+        bitset<8> encryptedByte;
+        for (int j = 0; j < 8; j++) {
+            textByte[j] = bitset<8>(plaintext[i])[j];
+        }
+        for (int j = 0; j < 8; j++) {
+            encryptionByte[7-j] = encryption_bits[i*8+j];
+        }
+        encryptedByte = textByte ^ encryptionByte;
+        //cout << encryptionByte << " ";
+        unsigned long a = textByte.to_ulong();
+        unsigned char c = static_cast<char>( a );
+        //cout << c << endl;
+        //cout << encryptedByte << " ";
+        a = encryptedByte.to_ulong();
+        c = static_cast<char>( a );
+        //cout << c << endl;
+        encrypted.push_back(c);
+    }
+
+    return encrypted;
+}
+
 int main() {
 
     //vector<int> initial_state = {1,0,1,0,1,1,0,0,1,1,1,0,0,0,0,1}; // Initial state of the register
     //vector<int> initial_state = {1,0,0}; // Initial state of the register
     //vector<int> initial_state = {0,1,0,0,1}; // Initial state of the register Zad2_1
     vector<int> initial_state = {1,0,1,1,0,1,0,1,1,0,1,1,0,1,0,1,0}; // Initial state of the register Zad1_L5
-    int m = 5; // Degree of the LFSR
+    int m = 17; // Degree of the LFSR
     //vector<int> feedback_taps = { 10, 13, 12, 15 };
     vector<int> feedback_taps = { 0, 4, 15, 16 };//Zad1_L5
     //vector<int> feedback_taps = { 1, 2 };//Zad 1
@@ -142,6 +214,7 @@ int main() {
     vector<int> output_stream = lfsr(initial_state, feedback_taps, output_length);
 */
     // Wyświetlenie wygenerowanego strumienia bitów
+    /*
     for (int bit : output_stream) {
         cout << bit << " ";
     }
@@ -154,6 +227,12 @@ int main() {
         cout << bit << " ";
     }
     cout << "Linear Complexity: " << result.second << endl;
+    */
+    cout << "Encrypted: " << encryptString("Lab-5/encrypted.txt");
+
+    writeFile("Lab-5/encrypted.txt", encryptString("Lab-5/plaintext.txt"));
+
+    cout << "Decrypted: " << encryptString("Lab-5/encrypted.txt");
 
     return 0;
 }
