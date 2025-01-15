@@ -5,6 +5,32 @@
 
 using namespace std;
 
+vector<int> LFSR_BY_BITS(const vector<int> &initial_state, int m, const vector<int> &feedback_taps, int output_length) {
+    vector<int> new_state =  initial_state;
+    vector<int> output_sequence;
+
+    int wildbit = 0, first_tap_position = 0;
+
+    for(int i = 0; i < feedback_taps.size() - 1; ++i) {
+        if(feedback_taps[i]){
+            first_tap_position = i;
+            break;
+        }
+    }
+
+    for (int a = 0; a < output_length; ++a) {
+        wildbit = new_state[first_tap_position];
+        for (int i = first_tap_position + 1; i <= feedback_taps.size() - 1; i++) {
+            if(feedback_taps[i]) wildbit = wildbit ^ new_state[i];
+        }
+        output_sequence.push_back(new_state.back());
+        new_state.pop_back();
+        new_state.insert(new_state.begin(), wildbit);
+    }
+
+    return output_sequence;
+}
+
 vector<int> LFSR_ALT(const vector<int> &initial_state, int m, const vector<int> &feedback_taps, int output_length) {
     vector<int> new_state =  initial_state;
     vector<int> output_sequence;
@@ -46,38 +72,6 @@ vector<int> lfsr(vector<int> initial_state, vector<int> feedback_taps, int outpu
 
     return output_stream;
 }
-/*
-pair<vector<int>, int> Berlekamp_Massey(const vector<int>& stream) {
-    vector<int> Connections_Polynomial(1);
-    vector<int> Backup_Polynomial(1);
-    int Linear_complexity = 0;
-    int last_update_index = -1;
-    int d = 0;
-    int delta = 0;
-
-    for (int N = 0; N < stream.size() - 1; ++N) {
-        d = stream[N];
-        for (int i = 1; i < Linear_complexity; ++i) {
-            d = d^(Connections_Polynomial[i] * stream[N - i]);
-        }
-        if (d == 0) continue;
-        vector<int>Temp_Polynomial = Connections_Polynomial;
-        delta = N - last_update_index;
-        for (int i = 0; i < Backup_Polynomial.size() - 1; ++i) {
-            Connections_Polynomial[delta+i] = Connections_Polynomial[delta+i]^Backup_Polynomial[i];
-        }
-        if (2*last_update_index <= N) {
-            Linear_complexity = N + 1 - Linear_complexity;
-            Backup_Polynomial = Temp_Polynomial;
-            last_update_index = N;
-        }
-    }
-    pair<vector<int>, int> result;
-    result.first = Connections_Polynomial;
-    result.second = Linear_complexity;
-    return result;
-}
-*/
 
 pair<vector<int>, int> Berlekamp_Massey(const vector<int>& stream) {
     vector<int> Connections_Polynomial(1, 1);
@@ -147,19 +141,22 @@ string encryptString(const std::string& filename) {
     string encrypted;
     const vector initial_state = {1,0,1,1,0,1,0,1,1,0,1,1,0,1,0,1,0};
     const vector feedback_taps = { 0, 4, 15, 16 };
+    //vector<int> feedback_taps_bits = { 1,0,1,0,1,0,0,0,0,0,0,0,0,0,0,1,1 };
     const int m = 17;
     const string plaintext = readFile(filename);
     const int output_length = plaintext.size()*8;
 
     vector<int> encryption_bits = LFSR_ALT(initial_state, m, feedback_taps, output_length);
+    //vector<int> encryption_bits = LFSR_BY_BITS(initial_state, m, feedback_taps_bits, output_length);
     std::vector bytes(plaintext.begin(), plaintext.end());
     /*
+    cout << "Encryption bits: " << endl;
     for (int bit : encryption_bits) {
         cout << bit;
     }
     cout << endl << endl;
     */
-    for (int i = 0; i < plaintext.size(); i++) {
+    for (int i = 0; i < plaintext.size()-1; i++) {
         bitset<8> textByte;
         bitset<8> encryptionByte;
         bitset<8> encryptedByte;
@@ -184,21 +181,71 @@ string encryptString(const std::string& filename) {
     return encrypted;
 }
 
+vector<int> recover_bits(const string& plaintext, const string& encrypted) {
+    vector<int> recovered_bits;
+
+    //plaintext.size() is in bytes
+    for (int i = 0; i < plaintext.size()-1; i++) {
+        bitset<8> plainByte;
+        bitset<8> encryptedByte;
+        bitset<8> recoveredByte;
+
+        //cout<<"PlainByte: ";
+        for (int j = 0; j < 8; j++) {
+            plainByte[j] = bitset<8>(plaintext[i])[j];
+            //cout << plainByte[j];
+        }
+        //cout << endl << plainByte << endl;
+        //cout << "Encrypted: " << endl;
+        for (int j = 0; j < 8; j++) {
+            encryptedByte[j] = bitset<8>(encrypted[i])[j];
+            //cout << encryptedByte[j];
+        }
+        //cout << encryptedByte << endl;
+        //cout << "Recovered: " << endl;
+        for (int j = 0; j < 8; j++) {
+            recoveredByte[j] = encryptedByte[j] ^ plainByte[j];
+        }
+        //cout << recoveredByte << endl << endl;
+        for (int j = 0; j < 8; j++) {
+            recovered_bits.push_back(recoveredByte[7-j]);
+        }
+    }
+
+    cout << "Recovered bytes: " << recovered_bits.size()/8 << endl;
+    cout << "Recovered bits: " << endl;
+    for (int bit : recovered_bits) {
+        cout << bit;
+    }
+    cout << endl << endl;
+    return recovered_bits;
+}
+
 int main() {
 
     //vector<int> initial_state = {1,0,1,0,1,1,0,0,1,1,1,0,0,0,0,1}; // Initial state of the register
     //vector<int> initial_state = {1,0,0}; // Initial state of the register
     //vector<int> initial_state = {0,1,0,0,1}; // Initial state of the register Zad2_1
-    vector<int> initial_state = {1,0,1,1,0,1,0,1,1,0,1,1,0,1,0,1,0}; // Initial state of the register Zad1_L5
+    //vector<int> initial_state = {1,0,1,1,0,1,0,1,1,0,1,1,0,1,0,1,0}; // Initial state of the register Zad1_L5
+    //int m = 16; // Degree of the LFSR
     int m = 17; // Degree of the LFSR
     //vector<int> feedback_taps = { 10, 13, 12, 15 };
-    vector<int> feedback_taps = { 0, 4, 15, 16 };//Zad1_L5
+    //vector<int> feedback_taps_bits = { 0,0,0,0,0,0,0,0,0,0,1,0,1,1,0,1 };
+    //vector<int> feedback_taps = { 0, 4, 15, 16 };//Zad1_L5
     //vector<int> feedback_taps = { 1, 2 };//Zad 1
+    //vector<int> feedback_taps_bits = { 0, 1, 1 };//Zad 1
     //vector<int> feedback_taps = { 2, 4 };//Zad 2_1
+    //vector<int> feedback_taps_bits = { 0, 0, 1, 0, 1 };
     //vector<int> feedback_taps = {1, 3, 4 };//Zad 2_2
+    //vector<int> feedback_taps_bits = { 0, 1, 0, 1, 1 };
+    //vector<int> feedback_taps_bits = { 0, 1, 0, 1, 1 };
     //int output_length = 14;
     int output_length = 25;
+    const vector initial_state = {1,0,1,1,0,1,0,1,1,0,1,1,0,1,0,1,0};
+    const vector feedback_taps = { 0, 4, 15, 16 };
+    vector<int> feedback_taps_bits = { 1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,1 };
     vector<int> output_stream = LFSR_ALT(initial_state, m, feedback_taps, output_length);
+    vector<int> output_stream2 = LFSR_BY_BITS(initial_state, m, feedback_taps_bits, output_length);
     /*
     // Stan początkowy rejestru (przykład: m = 3)
     vector<int> initial_state = { 0, 0, 1 };
@@ -214,25 +261,39 @@ int main() {
     vector<int> output_stream = lfsr(initial_state, feedback_taps, output_length);
 */
     // Wyświetlenie wygenerowanego strumienia bitów
-    /*
+
     for (int bit : output_stream) {
         cout << bit << " ";
     }
     cout << endl;
+    for (int bit : output_stream2) {
+        cout << bit << " ";
+    }
+    cout << endl;
 
-    pair<vector<int>, int> result = Berlekamp_Massey(output_stream);
+    pair<vector<int>, int> result = Berlekamp_Massey(output_stream2);
 
     cout << "Result: " << endl;
     for (int bit : result.first) {
         cout << bit << " ";
     }
     cout << "Linear Complexity: " << result.second << endl;
-    */
-    cout << "Encrypted: " << encryptString("Lab-5/encrypted.txt");
+
+
+    cout << "Encrypted: " << encryptString("Lab-5/plaintext.txt") << endl;
 
     writeFile("Lab-5/encrypted.txt", encryptString("Lab-5/plaintext.txt"));
 
-    cout << "Decrypted: " << encryptString("Lab-5/encrypted.txt");
+    cout << "Decrypted: " << encryptString("Lab-5/encrypted.txt") << endl;
+    vector<int> recovered_bits = recover_bits(readFile("Lab-5/plaintext.txt"), readFile("Lab-5/encrypted.txt"));
+
+    pair<vector<int>, int> result2 = Berlekamp_Massey(recovered_bits);
+
+    cout << "Result: " << endl;
+    for (int bit : result2.first) {
+        cout << bit << " ";
+    }
+    cout << "Linear Complexity: " << result2.second << endl;
 
     return 0;
 }
